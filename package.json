@@ -1,0 +1,21 @@
+{
+  "name": "com.saadnkhawaja.instant-sceneswitcher",
+  "version": "1.0.0",
+  "displayName": "Instant Scene Switcher",
+  "description": "Unity Editor utility for instantly switching scenes using build scenes or custom presets, with optional keyboard shortcuts for faster workflows.",
+  "unity": "2021.3",
+  "author": {
+    "name": "Saad Khawaja",
+    "url": "https://github.com/saadnkhawaja"
+  },
+  "keywords": [
+    "unity",
+    "editor",
+    "tools",
+    "workflow",
+    "scene",
+    "scene-switcher",
+    "shortcuts",
+    "presets"
+  ]
+}
