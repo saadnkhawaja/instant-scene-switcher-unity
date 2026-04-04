@@ -54,11 +54,10 @@ namespace SaadKhawaja.InstantSceneSwitcher
                             parent.style.flexDirection = FlexDirection.Row;
                             parent.style.alignItems = Align.Center;
                             parent.style.justifyContent = Justify.Center;
-                            parent.style.marginTop = -20;
+                            parent.style.marginTop = 0;
                             parent.style.marginBottom = 0;
                             parent.style.paddingTop = 0;
                             parent.style.paddingBottom = 0;
-                            parent.style.height = 22;
                             parent.style.flexGrow = 0;
 
                             var container = new IMGUIContainer(() =>
@@ -147,9 +146,11 @@ namespace SaadKhawaja.InstantSceneSwitcher
                 var currentSceneName = Path.GetFileNameWithoutExtension(currentScenePath);
                 int sceneIndex = Array.IndexOf(_sceneNames, currentSceneName);
 
-                EditorGUILayout.Space(10);
-
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(10);
                 int newIndex = EditorGUILayout.Popup(sceneIndex, _sceneNames, GUILayout.Width(160));
+                GUILayout.EndHorizontal();
+
                 if (newIndex != sceneIndex && newIndex >= 0 && newIndex < _scenes.Length)
                 {
                     if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
