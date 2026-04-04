@@ -72,6 +72,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
                             container.style.paddingTop = 0;
                             container.style.paddingBottom = 0;
                             container.style.flexGrow = 0;
+                            container.style.width = 170;
                             container.style.height = 22;
 
                             parent.Add(container);
@@ -146,10 +147,8 @@ namespace SaadKhawaja.InstantSceneSwitcher
                 var currentSceneName = Path.GetFileNameWithoutExtension(currentScenePath);
                 int sceneIndex = Array.IndexOf(_sceneNames, currentSceneName);
 
-                GUILayout.BeginHorizontal();
-                GUILayout.Space(10);
-                int newIndex = EditorGUILayout.Popup(sceneIndex, _sceneNames, EditorStyles.toolbarPopup, GUILayout.Width(160));
-                GUILayout.EndHorizontal();
+                // Explicit rect: x=10 left padding, y=2 centers 18px popup in 22px container, width=160, height=18
+                int newIndex = EditorGUI.Popup(new Rect(10, 2, 160, 18), sceneIndex, _sceneNames, EditorStyles.toolbarPopup);
 
                 if (newIndex != sceneIndex && newIndex >= 0 && newIndex < _scenes.Length)
                 {
