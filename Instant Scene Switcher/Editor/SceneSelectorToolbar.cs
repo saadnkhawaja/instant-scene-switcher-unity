@@ -148,7 +148,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
 
                 GUILayout.BeginHorizontal();
                 GUILayout.Space(10);
-                int newIndex = EditorGUILayout.Popup(sceneIndex, _sceneNames, GUILayout.Width(160));
+                int newIndex = EditorGUILayout.Popup(sceneIndex, _sceneNames, EditorStyles.toolbarPopup, GUILayout.Width(160));
                 GUILayout.EndHorizontal();
 
                 if (newIndex != sceneIndex && newIndex >= 0 && newIndex < _scenes.Length)
