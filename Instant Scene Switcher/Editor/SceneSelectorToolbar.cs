@@ -155,62 +155,9 @@ namespace SaadKhawaja.InstantSceneSwitcher
                     if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
                         EditorSceneManager.OpenScene(_scenes[newIndex]);
                 }
-
-                var settings = InstantSceneSwitcherSettings.instance;
-                bool isBuild = settings.ActivePresetId == InstantSceneSwitcherSettings.BuildPresetId;
-
-                if (isBuild)
-                {
-                    bool inBuild = EditorBuildSettings.scenes.Any(s => s.path == currentScenePath);
-
-                    if (inBuild)
-                    {
-                        if (GUILayout.Button("-", GUILayout.Width(20)))
-                            RemoveSceneFromBuild(currentScenePath);
-                    }
-                    else
-                    {
-                        if (GUILayout.Button("+", GUILayout.Width(20)))
-                            AddSceneToBuild(currentScenePath);
-                    }
-                }
-                else
-                {
-                    bool inPreset = settings.ContainsScene(settings.ActivePresetId, currentScenePath);
-
-                    if (inPreset)
-                    {
-                        if (GUILayout.Button("-", GUILayout.Width(20)))
-                        {
-                            settings.RemoveSceneByPath(settings.ActivePresetId, currentScenePath);
-                            RefreshFromPreset();
-                        }
-                    }
-                    else
-                    {
-                        if (GUILayout.Button("+", GUILayout.Width(20)))
-                        {
-                            settings.AddScene(settings.ActivePresetId, currentScenePath);
-                            RefreshFromPreset();
-                        }
-                    }
-                }
             }
         }
 
-        private static void AddSceneToBuild(string path)
-        {
-            var scenes = EditorBuildSettings.scenes.ToList();
-            scenes.Add(new EditorBuildSettingsScene(path, true));
-            EditorBuildSettings.scenes = scenes.ToArray();
-            RefreshFromPreset();
-        }
 
-        private static void RemoveSceneFromBuild(string path)
-        {
-            var scenes = EditorBuildSettings.scenes.Where(s => s.path != path).ToArray();
-            EditorBuildSettings.scenes = scenes;
-            RefreshFromPreset();
-        }
     }
 }
