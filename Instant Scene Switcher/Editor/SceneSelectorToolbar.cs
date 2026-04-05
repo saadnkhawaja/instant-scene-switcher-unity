@@ -139,7 +139,17 @@ namespace SaadKhawaja.InstantSceneSwitcher
             RefreshFromPresetIfNeeded();
 
             if (_sceneNames == null || _sceneNames.Length == 0)
+            {
+                using (new EditorGUI.DisabledScope(true))
+                {
+                    var noSceneContent = new GUIContent(
+                        "No Scenes Added",
+                        "No scenes in the active preset. Open Instant Scene Switcher via Tools > Saad Khawaja > Instant Scene Switcher to add scenes or switch presets."
+                    );
+                    GUI.Button(new Rect(10, 2, 160, 18), noSceneContent, EditorStyles.toolbarPopup);
+                }
                 return;
+            }
 
             using (new EditorGUI.DisabledScope(Application.isPlaying))
             {
