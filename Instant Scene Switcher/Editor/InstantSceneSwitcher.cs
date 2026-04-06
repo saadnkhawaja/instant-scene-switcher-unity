@@ -633,8 +633,8 @@ namespace SaadKhawaja.InstantSceneSwitcher
         private int _index;
         private Vector2 _scroll;
 
-        private const float W = 520;
-        private const float H = 420;
+        private const float W = 380;
+        private const float H = 300;
 
         [Shortcut("Saad Khawaja/Instant Scene Switcher/Quick Switch", KeyCode.S, ShortcutModifiers.Action | ShortcutModifiers.Alt)]
         private static void QuickSwitchShortcut() => OpenPopup();
@@ -675,19 +675,19 @@ namespace SaadKhawaja.InstantSceneSwitcher
 
             HandleKeys();
 
-            GUILayout.Space(8);
+            GUILayout.Space(4);
 
             using (new GUILayout.VerticalScope("box"))
             {
                 Texture2D logo = Resources.Load<Texture2D>("logo_iss");
                 if (logo != null)
-                    GUILayout.Label(logo, GUILayout.Height(128));
+                    GUILayout.Label(logo, GUILayout.Height(50));
 
                 EditorGUILayout.LabelField("Quick Scene Switch", EditorStyles.boldLabel);
                 EditorGUILayout.LabelField("Up/Down selects • Enter loads • Esc closes", EditorStyles.miniLabel);
             }
 
-            GUILayout.Space(8);
+            GUILayout.Space(4);
 
             using (new GUILayout.VerticalScope("box"))
             {
