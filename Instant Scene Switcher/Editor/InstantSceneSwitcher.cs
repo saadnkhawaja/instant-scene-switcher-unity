@@ -681,7 +681,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
             {
                 Texture2D logo = Resources.Load<Texture2D>("logo_iss");
                 if (logo != null)
-                    GUILayout.Label(logo, GUILayout.Height(35));
+                    GUILayout.Label(logo, GUILayout.Height(53));
 
                 EditorGUILayout.LabelField("Quick Scene Switch", EditorStyles.boldLabel);
                 EditorGUILayout.LabelField("Up/Down selects • Enter loads • Esc closes", EditorStyles.miniLabel);
@@ -697,13 +697,13 @@ namespace SaadKhawaja.InstantSceneSwitcher
                 {
                     string p = _scenePaths[i];
                     string name = System.IO.Path.GetFileNameWithoutExtension(p);
-                    string label = $"{name} ({p})";
 
                     Rect r = GUILayoutUtility.GetRect(10, 28, GUILayout.ExpandWidth(true));
                     if (i == _index)
                         EditorGUI.DrawRect(r, new Color(0.2f, 0.6f, 1f, 0.20f));
 
-                    GUI.Label(new Rect(r.x + 10, r.y + 6, r.width - 20, r.height), label, EditorStyles.label);
+                    var centeredLabel = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleCenter };
+                    GUI.Label(new Rect(r.x, r.y, r.width, r.height), name, centeredLabel);
 
                     var e = Event.current;
 
