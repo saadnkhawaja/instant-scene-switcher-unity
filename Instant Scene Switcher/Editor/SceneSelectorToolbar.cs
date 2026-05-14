@@ -15,6 +15,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
     {
         private static bool _injected;
         private static bool _treeDumped;
+        private static bool _onGuiLogged;
 
         private static string[] _scenes = Array.Empty<string>();
         private static string[] _sceneNames = Array.Empty<string>();
@@ -220,6 +221,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
 
         private static void OnGUI()
         {
+            if (!_onGuiLogged) { _onGuiLogged = true; Debug.Log("[InstantSceneSwitcher] OnGUI called."); }
             RefreshFromPresetIfNeeded();
 
             if (_sceneNames == null || _sceneNames.Length == 0)
