@@ -14,6 +14,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
     public static class SceneSelectorToolbar
     {
         private static bool _injected;
+        private static bool _treeDumped;
 
         private static string[] _scenes = Array.Empty<string>();
         private static string[] _sceneNames = Array.Empty<string>();
@@ -38,7 +39,11 @@ namespace SaadKhawaja.InstantSceneSwitcher
                 {
                     var editorAssembly = typeof(Editor).Assembly;
                     var toolbarType = editorAssembly.GetType("UnityEditor.Toolbar");
-                    if (toolbarType == null) return;
+                    if (toolbarType == null)
+                    {
+                        if (!_treeDumped) { _treeDumped = true; Debug.LogWarning("[InstantSceneSwitcher] UnityEditor.Toolbar type not found."); }
+                        return;
+                    }
 
                     var toolbars = Resources.FindObjectsOfTypeAll(toolbarType);
                     if (toolbars.Length == 0) return;
@@ -46,11 +51,32 @@ namespace SaadKhawaja.InstantSceneSwitcher
                     var toolbarObj = toolbars[0];
                     var root = GetToolbarRoot(toolbarType, toolbarObj);
 
-                    var rightZone = root?.Q("ToolbarZoneRightAlign")
-                                 ?? root?.Q("ToolbarZoneRight")
-                                 ?? root?.Q("unity-right-toolbar-zone");
+                    if (root == null)
+                    {
+                        if (!_treeDumped) { _treeDumped = true; Debug.LogWarning("[InstantSceneSwitcher] Could not get toolbar root VisualElement."); }
+                        return;
+                    }
 
-                    if (rightZone != null && rightZone.Q("SceneSelectorContainer") == null)
+                    if (!_treeDumped)
+                    {
+                        _treeDumped = true;
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine("[InstantSceneSwitcher] Toolbar element tree:");
+                        DumpElements(root, sb, 0);
+                        Debug.Log(sb.ToString());
+                    }
+
+                    var rightZone = root.Q("ToolbarZoneRightAlign")
+                                 ?? root.Q("ToolbarZoneRight")
+                                 ?? root.Q("unity-right-toolbar-zone");
+
+                    if (rightZone == null)
+                    {
+                        Debug.LogWarning("[InstantSceneSwitcher] Could not find right toolbar zone. Check the element tree log above for the correct name.");
+                        return;
+                    }
+
+                    if (rightZone.Q("SceneSelectorContainer") == null)
                     {
                         var parent = new VisualElement { name = "SceneSelectorContainer" };
 
@@ -132,6 +158,15 @@ namespace SaadKhawaja.InstantSceneSwitcher
             }
 
             return null;
+        }
+
+        private static void DumpElements(VisualElement el, System.Text.StringBuilder sb, int depth)
+        {
+            if (depth > 6) return;
+            var indent = new string(' ', depth * 2);
+            sb.AppendLine($"{indent}{el.GetType().Name} name='{el.name}' class='{string.Join(" ", el.GetClasses())}'");
+            foreach (var child in el.Children())
+                DumpElements(child, sb, depth + 1);
         }
 
         private static void RefreshFromPresetIfNeeded()
