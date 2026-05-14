@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -15,7 +16,9 @@ namespace SaadKhawaja.InstantSceneSwitcher
     {
         private static bool _injected;
         private static bool _treeDumped;
-        private static bool _onGuiLogged;
+
+        private static ToolbarMenu _toolbarMenu;
+        private static string _lastMenuText;
 
         private static string[] _scenes = Array.Empty<string>();
         private static string[] _sceneNames = Array.Empty<string>();
@@ -49,8 +52,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
                     var toolbars = Resources.FindObjectsOfTypeAll(toolbarType);
                     if (toolbars.Length == 0) return;
 
-                    var toolbarObj = toolbars[0];
-                    var root = GetToolbarRoot(toolbarType, toolbarObj);
+                    var root = GetToolbarRoot(toolbarType, toolbars[0]);
 
                     if (root == null)
                     {
@@ -73,52 +75,94 @@ namespace SaadKhawaja.InstantSceneSwitcher
 
                     if (rightZone == null)
                     {
-                        Debug.LogWarning("[InstantSceneSwitcher] Could not find right toolbar zone. Check the element tree log above for the correct name.");
+                        Debug.LogWarning("[InstantSceneSwitcher] Could not find right toolbar zone.");
                         return;
                     }
 
-                    if (rightZone.Q("SceneSelectorContainer") == null)
+                    if (rightZone.Q("SceneSelectorToolbarMenu") == null)
                     {
-                        var parent = new VisualElement { name = "SceneSelectorContainer" };
-
-                        parent.style.flexDirection = FlexDirection.Row;
-                        parent.style.alignItems = Align.Center;
-                        parent.style.justifyContent = Justify.Center;
-                        parent.style.marginTop = 0;
-                        parent.style.marginBottom = 0;
-                        parent.style.paddingTop = 0;
-                        parent.style.paddingBottom = 0;
-                        parent.style.flexGrow = 0;
-
-                        var container = new IMGUIContainer(() =>
-                        {
-                            try { OnGUI(); }
-                            catch { }
-                        });
-
-                        container.style.alignSelf = Align.Center;
-                        container.style.marginTop = 0;
-                        container.style.marginBottom = 0;
-                        container.style.paddingTop = 0;
-                        container.style.paddingBottom = 0;
-                        container.style.flexGrow = 0;
-                        container.style.width = 170;
-                        container.style.height = 22;
-
-                        parent.Add(container);
-                        rightZone.Insert(0, parent);
+                        _toolbarMenu = CreateToolbarMenu();
+                        rightZone.Insert(0, _toolbarMenu);
                         _injected = true;
-                        Debug.Log("[InstantSceneSwitcher] Toolbar injected successfully.");
                     }
                 }
 
                 RefreshFromPresetIfNeeded();
+                UpdateMenuText();
             }
             catch (Exception ex)
             {
                 if (!_injected)
                     Debug.LogError($"[InstantSceneSwitcher] Injection error: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
             }
+        }
+
+        private static ToolbarMenu CreateToolbarMenu()
+        {
+            var menu = new ToolbarMenu { name = "SceneSelectorToolbarMenu" };
+            menu.style.minWidth = 130;
+            menu.style.maxWidth = 200;
+            RebuildMenuItems(menu);
+            return menu;
+        }
+
+        private static void RebuildMenuItems(ToolbarMenu menu)
+        {
+            if (menu == null) return;
+
+            var items = menu.menu.MenuItems();
+            for (int i = items.Count - 1; i >= 0; i--)
+                menu.menu.RemoveItemAt(i);
+
+            if (_sceneNames == null || _sceneNames.Length == 0)
+            {
+                menu.text = "No Scenes";
+                menu.SetEnabled(false);
+                return;
+            }
+
+            menu.SetEnabled(true);
+
+            for (int i = 0; i < _sceneNames.Length; i++)
+            {
+                int idx = i;
+                string sceneName = _sceneNames[i];
+                menu.menu.AppendAction(
+                    sceneName,
+                    _ =>
+                    {
+                        if (!Application.isPlaying && EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                            EditorSceneManager.OpenScene(_scenes[idx]);
+                    },
+                    _ =>
+                    {
+                        var current = Path.GetFileNameWithoutExtension(SceneManager.GetActiveScene().path);
+                        return current == sceneName
+                            ? DropdownMenuAction.Status.Checked
+                            : DropdownMenuAction.Status.Normal;
+                    }
+                );
+            }
+        }
+
+        private static void UpdateMenuText()
+        {
+            if (_toolbarMenu == null) return;
+
+            string text;
+            if (_sceneNames == null || _sceneNames.Length == 0)
+            {
+                text = "No Scenes";
+            }
+            else
+            {
+                var currentName = Path.GetFileNameWithoutExtension(SceneManager.GetActiveScene().path);
+                text = Array.IndexOf(_sceneNames, currentName) >= 0 ? currentName : $"({currentName})";
+            }
+
+            if (text == _lastMenuText) return;
+            _lastMenuText = text;
+            _toolbarMenu.text = text;
         }
 
         private static VisualElement GetToolbarRoot(Type toolbarType, UnityEngine.Object toolbarObj)
@@ -193,6 +237,9 @@ namespace SaadKhawaja.InstantSceneSwitcher
                          ?? Array.Empty<string>();
 
                 _sceneNames = _scenes.Select(p => Path.GetFileNameWithoutExtension(p)).ToArray();
+
+                _lastMenuText = null; // force text refresh
+                RebuildMenuItems(_toolbarMenu);
             }
 
             if (_scenes == null) _scenes = Array.Empty<string>();
@@ -212,73 +259,15 @@ namespace SaadKhawaja.InstantSceneSwitcher
         {
             _injected = false;
             _treeDumped = false;
-            _onGuiLogged = false;
+            _lastMenuText = null;
 
-            var editorAssembly = typeof(Editor).Assembly;
-            var toolbarType = editorAssembly.GetType("UnityEditor.Toolbar");
-            Debug.Log($"[ISS] Toolbar type: {(toolbarType == null ? "NOT FOUND" : toolbarType.FullName)}");
-            if (toolbarType == null) return;
-
-            var toolbars = Resources.FindObjectsOfTypeAll(toolbarType);
-            Debug.Log($"[ISS] Toolbar instances found: {toolbars.Length}");
-            if (toolbars.Length == 0) return;
-
-            var toolbarObj = toolbars[0];
-            Debug.Log($"[ISS] Toolbar object type: {toolbarObj.GetType().FullName}");
-
-            var root = GetToolbarRoot(toolbarType, toolbarObj);
-            Debug.Log($"[ISS] Root VisualElement: {(root == null ? "NULL" : root.GetType().Name + " name='" + root.name + "'")}");
-            if (root == null) return;
-
-            var rightZone = root.Q("ToolbarZoneRightAlign")
-                         ?? root.Q("ToolbarZoneRight")
-                         ?? root.Q("unity-right-toolbar-zone");
-            Debug.Log($"[ISS] Right zone: {(rightZone == null ? "NULL" : rightZone.GetType().Name + " childCount=" + rightZone.childCount)}");
-            if (rightZone == null) return;
-
-            var existing = rightZone.Q("SceneSelectorContainer");
-            Debug.Log($"[ISS] Existing SceneSelectorContainer: {(existing == null ? "not present" : "ALREADY PRESENT")}");
-            if (existing != null)
+            if (_toolbarMenu != null)
             {
-                Debug.Log($"[ISS]   Container worldBound: {existing.worldBound}");
-                Debug.Log($"[ISS]   Container resolvedStyle size: {existing.resolvedStyle.width}x{existing.resolvedStyle.height}");
-                Debug.Log($"[ISS]   Container display: {existing.resolvedStyle.display}");
-                Debug.Log($"[ISS]   Container visibility: {existing.resolvedStyle.visibility}");
-                foreach (var child in existing.Children())
-                    Debug.Log($"[ISS]   Child: {child.GetType().Name} worldBound={child.worldBound} size={child.resolvedStyle.width}x{child.resolvedStyle.height}");
-                return;
+                _toolbarMenu.RemoveFromHierarchy();
+                _toolbarMenu = null;
             }
 
-            var parent = new VisualElement { name = "SceneSelectorContainer" };
-            parent.style.flexDirection = FlexDirection.Row;
-            parent.style.alignItems = Align.Center;
-            parent.style.justifyContent = Justify.Center;
-            parent.style.marginTop = 0;
-            parent.style.marginBottom = 0;
-            parent.style.paddingTop = 0;
-            parent.style.paddingBottom = 0;
-            parent.style.flexGrow = 0;
-
-            var container = new IMGUIContainer(() =>
-            {
-                try { OnGUI(); }
-                catch (Exception ex) { Debug.LogError($"[ISS] OnGUI exception: {ex}"); }
-            });
-            container.style.alignSelf = Align.Center;
-            container.style.marginTop = 0;
-            container.style.marginBottom = 0;
-            container.style.paddingTop = 0;
-            container.style.paddingBottom = 0;
-            container.style.flexGrow = 0;
-            container.style.width = 170;
-            container.style.height = 22;
-
-            parent.Add(container);
-            rightZone.Insert(0, parent);
-            _injected = true;
-            Debug.Log("[ISS] Injection complete. Parent worldBound will be available after next layout pass.");
-
-            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+            Debug.Log("[ISS] ForceShowToolbar: reset injection flags, will re-inject on next Update.");
         }
 
         private static int ComputeHash(System.Collections.Generic.List<string> scenes)
@@ -292,42 +281,5 @@ namespace SaadKhawaja.InstantSceneSwitcher
                 return h;
             }
         }
-
-        private static void OnGUI()
-        {
-            if (!_onGuiLogged) { _onGuiLogged = true; Debug.Log("[InstantSceneSwitcher] OnGUI called."); }
-            RefreshFromPresetIfNeeded();
-
-            if (_sceneNames == null || _sceneNames.Length == 0)
-            {
-                using (new EditorGUI.DisabledScope(true))
-                {
-                    var noSceneContent = new GUIContent(
-                        "No Scenes",
-                        "No scenes in the active preset. Open Instant Scene Switcher via Tools > Saad Khawaja > Instant Scene Switcher to add scenes or switch presets."
-                    );
-                    GUI.Button(new Rect(10, 2, 160, 18), noSceneContent, EditorStyles.toolbarPopup);
-                }
-                return;
-            }
-
-            using (new EditorGUI.DisabledScope(Application.isPlaying))
-            {
-                var currentScenePath = SceneManager.GetActiveScene().path;
-                var currentSceneName = Path.GetFileNameWithoutExtension(currentScenePath);
-                int sceneIndex = Array.IndexOf(_sceneNames, currentSceneName);
-
-                // Explicit rect: x=10 left padding, y=2 centers 18px popup in 22px container, width=160, height=18
-                int newIndex = EditorGUI.Popup(new Rect(10, 2, 160, 18), sceneIndex, _sceneNames, EditorStyles.toolbarPopup);
-
-                if (newIndex != sceneIndex && newIndex >= 0 && newIndex < _scenes.Length)
-                {
-                    if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
-                        EditorSceneManager.OpenScene(_scenes[newIndex]);
-                }
-            }
-        }
-
-
     }
 }
