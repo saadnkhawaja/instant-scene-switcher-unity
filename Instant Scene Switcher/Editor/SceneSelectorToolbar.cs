@@ -105,15 +105,18 @@ namespace SaadKhawaja.InstantSceneSwitcher
                         container.style.height = 22;
 
                         parent.Add(container);
-                        rightZone.Add(parent);
+                        rightZone.Insert(0, parent);
                         _injected = true;
+                        Debug.Log("[InstantSceneSwitcher] Toolbar injected successfully.");
                     }
                 }
 
                 RefreshFromPresetIfNeeded();
             }
-            catch
+            catch (Exception ex)
             {
+                if (!_injected)
+                    Debug.LogError($"[InstantSceneSwitcher] Injection error: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
