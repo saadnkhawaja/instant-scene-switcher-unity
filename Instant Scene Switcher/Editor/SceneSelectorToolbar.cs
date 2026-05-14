@@ -1,16 +1,147 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using UnityEditor;
 using UnityEditor.SceneManagement;
-using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+
+#if UNITY_6000_3_OR_NEWER
+using UnityEditor.Toolbars;
+#else
+using System.Reflection;
+using UnityEditor.UIElements;
 using UnityEngine.UIElements;
+#endif
 
 namespace SaadKhawaja.InstantSceneSwitcher
 {
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Unity 6.3+  — official MainToolbarElement API (no reflection / injection)
+// ─────────────────────────────────────────────────────────────────────────────
+#if UNITY_6000_3_OR_NEWER
+
+    [InitializeOnLoad]
+    public static class SceneSelectorToolbar
+    {
+        const string kElementPath = "SaadKhawaja/Instant Scene Switcher/Scene Selector";
+
+        private static string[] _scenes = Array.Empty<string>();
+        private static string[] _sceneNames = Array.Empty<string>();
+        private static string _lastActivePresetId;
+        private static int _lastSceneHash;
+
+        static SceneSelectorToolbar()
+        {
+            EditorSceneManager.activeSceneChangedInEditMode += (_, __) => MainToolbar.Refresh(kElementPath);
+            SceneManager.activeSceneChanged             += (_, __) => MainToolbar.Refresh(kElementPath);
+        }
+
+        [MainToolbarElement(kElementPath, defaultDockPosition = MainToolbarDockPosition.Right, defaultDockIndex = 0)]
+        public static MainToolbarElement CreateSceneSelectorDropdown()
+        {
+            RefreshScenes();
+
+            string label;
+            if (_sceneNames.Length == 0)
+            {
+                label = "No Scenes";
+            }
+            else
+            {
+                var current = GetCurrentSceneName();
+                label = Array.IndexOf(_sceneNames, current) >= 0 ? current : $"({current})";
+            }
+
+            var content = new MainToolbarContent(label, null, "Instant Scene Switcher — select a scene");
+            return new MainToolbarDropdown(content, ShowDropdownMenu);
+        }
+
+        static void ShowDropdownMenu(Rect dropDownRect)
+        {
+            RefreshScenes();
+            var menu = new GenericMenu();
+
+            if (_sceneNames.Length == 0)
+            {
+                menu.AddDisabledItem(new GUIContent("No Scenes"));
+            }
+            else
+            {
+                var current = GetCurrentSceneName();
+                for (int i = 0; i < _sceneNames.Length; i++)
+                {
+                    int idx = i;
+                    string sceneName = _sceneNames[i];
+                    string scenePath = _scenes[i];
+                    menu.AddItem(new GUIContent(sceneName), current == sceneName, () => SwitchScene(scenePath));
+                }
+            }
+
+            menu.DropDown(dropDownRect);
+        }
+
+        static void SwitchScene(string scenePath)
+        {
+            if (Application.isPlaying) return;
+            if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                EditorSceneManager.OpenScene(scenePath);
+        }
+
+        static string GetCurrentSceneName()
+        {
+            var scene = Application.isPlaying
+                ? SceneManager.GetActiveScene()
+                : EditorSceneManager.GetActiveScene();
+            return string.IsNullOrEmpty(scene.name) ? "Untitled" : scene.name;
+        }
+
+        static void RefreshScenes()
+        {
+            var settings = InstantSceneSwitcherSettings.instance;
+            string activeId = settings.ActivePresetId;
+            var list = SceneSelectorToolbarBridge.GetActiveScenes();
+            int hash = ComputeHash(list);
+
+            if (activeId == _lastActivePresetId && hash == _lastSceneHash) return;
+
+            _lastActivePresetId = activeId;
+            _lastSceneHash = hash;
+
+            _scenes = list?
+                        .Where(p => !string.IsNullOrEmpty(p) && File.Exists(p))
+                        .Distinct()
+                        .ToArray()
+                     ?? Array.Empty<string>();
+
+            _sceneNames = _scenes.Select(p => Path.GetFileNameWithoutExtension(p)).ToArray();
+        }
+
+        public static void RefreshFromPreset()
+        {
+            _lastActivePresetId = null;
+            _lastSceneHash = 0;
+            MainToolbar.Refresh(kElementPath);
+        }
+
+        static int ComputeHash(System.Collections.Generic.List<string> scenes)
+        {
+            if (scenes == null || scenes.Count == 0) return 0;
+            unchecked
+            {
+                int h = 17;
+                foreach (var s in scenes) h = h * 31 + (s?.GetHashCode() ?? 0);
+                return h;
+            }
+        }
+    }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Unity 2021.3 – 6.2  — reflection-based injection + ToolbarMenu
+// ─────────────────────────────────────────────────────────────────────────────
+#else
+
     [InitializeOnLoad]
     public static class SceneSelectorToolbar
     {
@@ -53,7 +184,6 @@ namespace SaadKhawaja.InstantSceneSwitcher
                     if (toolbars.Length == 0) return;
 
                     var root = GetToolbarRoot(toolbarType, toolbars[0]);
-
                     if (root == null)
                     {
                         if (!_treeDumped) { _treeDumped = true; Debug.LogWarning("[InstantSceneSwitcher] Could not get toolbar root VisualElement."); }
@@ -167,7 +297,6 @@ namespace SaadKhawaja.InstantSceneSwitcher
 
         private static VisualElement GetToolbarRoot(Type toolbarType, UnityEngine.Object toolbarObj)
         {
-            // Primary: m_Root field (Unity 2021.3 – 2023.x and most Unity 6.x builds)
             var rootField = toolbarType.GetField("m_Root", BindingFlags.NonPublic | BindingFlags.Instance);
             if (rootField != null)
             {
@@ -175,28 +304,23 @@ namespace SaadKhawaja.InstantSceneSwitcher
                 if (root != null) return root;
             }
 
-            // Fallback: windowBackend.visualTree (Unity 6.3+ if m_Root was removed)
             var guiViewType = typeof(Editor).Assembly.GetType("UnityEditor.GUIView");
             if (guiViewType != null)
             {
-                var backendProp = guiViewType.GetProperty("windowBackend",
-                    BindingFlags.NonPublic | BindingFlags.Instance);
+                var backendProp = guiViewType.GetProperty("windowBackend", BindingFlags.NonPublic | BindingFlags.Instance);
                 if (backendProp != null)
                 {
                     var backend = backendProp.GetValue(toolbarObj);
                     if (backend != null)
                     {
-                        var vtProp = backend.GetType().GetProperty("visualTree",
-                            BindingFlags.Public | BindingFlags.Instance);
+                        var vtProp = backend.GetType().GetProperty("visualTree", BindingFlags.Public | BindingFlags.Instance);
                         var root = vtProp?.GetValue(backend) as VisualElement;
                         if (root != null) return root;
                     }
                 }
             }
 
-            // Last resort: scan all VisualElement-typed fields on the toolbar type
-            foreach (var field in toolbarType.GetFields(
-                         BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance))
+            foreach (var field in toolbarType.GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance))
             {
                 if (typeof(VisualElement).IsAssignableFrom(field.FieldType))
                 {
@@ -221,7 +345,6 @@ namespace SaadKhawaja.InstantSceneSwitcher
         {
             var settings = InstantSceneSwitcherSettings.instance;
             string activeId = settings.ActivePresetId;
-
             var list = SceneSelectorToolbarBridge.GetActiveScenes();
             int hash = ComputeHash(list);
 
@@ -238,7 +361,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
 
                 _sceneNames = _scenes.Select(p => Path.GetFileNameWithoutExtension(p)).ToArray();
 
-                _lastMenuText = null; // force text refresh
+                _lastMenuText = null;
                 RebuildMenuItems(_toolbarMenu);
             }
 
@@ -267,7 +390,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
                 _toolbarMenu = null;
             }
 
-            Debug.Log("[ISS] ForceShowToolbar: reset injection flags, will re-inject on next Update.");
+            Debug.Log("[ISS] ForceShowToolbar: reset — will re-inject on next Update.");
         }
 
         private static int ComputeHash(System.Collections.Generic.List<string> scenes)
@@ -276,10 +399,12 @@ namespace SaadKhawaja.InstantSceneSwitcher
             unchecked
             {
                 int h = 17;
-                for (int i = 0; i < scenes.Count; i++)
-                    h = h * 31 + (scenes[i]?.GetHashCode() ?? 0);
+                foreach (var s in scenes) h = h * 31 + (s?.GetHashCode() ?? 0);
                 return h;
             }
         }
     }
+
+#endif
+
 }
