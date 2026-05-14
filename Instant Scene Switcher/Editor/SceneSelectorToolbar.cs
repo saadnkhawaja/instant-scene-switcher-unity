@@ -13,7 +13,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
     [InitializeOnLoad]
     public static class SceneSelectorToolbar
     {
-        private static ScriptableObject _toolbar;
+        private static bool _injected;
 
         private static string[] _scenes = Array.Empty<string>();
         private static string[] _sceneNames = Array.Empty<string>();
@@ -34,50 +34,53 @@ namespace SaadKhawaja.InstantSceneSwitcher
         {
             try
             {
-                if (_toolbar == null)
+                if (!_injected)
                 {
                     var editorAssembly = typeof(Editor).Assembly;
                     var toolbarType = editorAssembly.GetType("UnityEditor.Toolbar");
+                    if (toolbarType == null) return;
+
                     var toolbars = Resources.FindObjectsOfTypeAll(toolbarType);
-                    _toolbar = toolbars.Length > 0 ? (ScriptableObject)toolbars[0] : null;
+                    if (toolbars.Length == 0) return;
 
-                    if (_toolbar != null)
+                    var toolbarObj = toolbars[0];
+                    var root = GetToolbarRoot(toolbarType, toolbarObj);
+
+                    var rightZone = root?.Q("ToolbarZoneRightAlign")
+                                 ?? root?.Q("ToolbarZoneRight")
+                                 ?? root?.Q("unity-right-toolbar-zone");
+
+                    if (rightZone != null && rightZone.Q("SceneSelectorContainer") == null)
                     {
-                        var rootField = toolbarType.GetField("m_Root", BindingFlags.NonPublic | BindingFlags.Instance);
-                        var root = rootField.GetValue(_toolbar) as VisualElement;
+                        var parent = new VisualElement { name = "SceneSelectorContainer" };
 
-                        var rightZone = root?.Q("ToolbarZoneRightAlign");
-                        if (rightZone != null && rightZone.Q("SceneSelectorContainer") == null)
+                        parent.style.flexDirection = FlexDirection.Row;
+                        parent.style.alignItems = Align.Center;
+                        parent.style.justifyContent = Justify.Center;
+                        parent.style.marginTop = 0;
+                        parent.style.marginBottom = 0;
+                        parent.style.paddingTop = 0;
+                        parent.style.paddingBottom = 0;
+                        parent.style.flexGrow = 0;
+
+                        var container = new IMGUIContainer(() =>
                         {
-                            var parent = new VisualElement { name = "SceneSelectorContainer" };
+                            try { OnGUI(); }
+                            catch { }
+                        });
 
-                            parent.style.flexDirection = FlexDirection.Row;
-                            parent.style.alignItems = Align.Center;
-                            parent.style.justifyContent = Justify.Center;
-                            parent.style.marginTop = 0;
-                            parent.style.marginBottom = 0;
-                            parent.style.paddingTop = 0;
-                            parent.style.paddingBottom = 0;
-                            parent.style.flexGrow = 0;
+                        container.style.alignSelf = Align.Center;
+                        container.style.marginTop = 0;
+                        container.style.marginBottom = 0;
+                        container.style.paddingTop = 0;
+                        container.style.paddingBottom = 0;
+                        container.style.flexGrow = 0;
+                        container.style.width = 170;
+                        container.style.height = 22;
 
-                            var container = new IMGUIContainer(() =>
-                            {
-                                try { OnGUI(); }
-                                catch {  }
-                            });
-
-                            container.style.alignSelf = Align.Center;
-                            container.style.marginTop = 0;
-                            container.style.marginBottom = 0;
-                            container.style.paddingTop = 0;
-                            container.style.paddingBottom = 0;
-                            container.style.flexGrow = 0;
-                            container.style.width = 170;
-                            container.style.height = 22;
-
-                            parent.Add(container);
-                            rightZone.Add(parent);
-                        }
+                        parent.Add(container);
+                        rightZone.Add(parent);
+                        _injected = true;
                     }
                 }
 
@@ -86,6 +89,49 @@ namespace SaadKhawaja.InstantSceneSwitcher
             catch
             {
             }
+        }
+
+        private static VisualElement GetToolbarRoot(Type toolbarType, UnityEngine.Object toolbarObj)
+        {
+            // Primary: m_Root field (Unity 2021.3 – 2023.x and most Unity 6.x builds)
+            var rootField = toolbarType.GetField("m_Root", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (rootField != null)
+            {
+                var root = rootField.GetValue(toolbarObj) as VisualElement;
+                if (root != null) return root;
+            }
+
+            // Fallback: windowBackend.visualTree (Unity 6.3+ if m_Root was removed)
+            var guiViewType = typeof(Editor).Assembly.GetType("UnityEditor.GUIView");
+            if (guiViewType != null)
+            {
+                var backendProp = guiViewType.GetProperty("windowBackend",
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+                if (backendProp != null)
+                {
+                    var backend = backendProp.GetValue(toolbarObj);
+                    if (backend != null)
+                    {
+                        var vtProp = backend.GetType().GetProperty("visualTree",
+                            BindingFlags.Public | BindingFlags.Instance);
+                        var root = vtProp?.GetValue(backend) as VisualElement;
+                        if (root != null) return root;
+                    }
+                }
+            }
+
+            // Last resort: scan all VisualElement-typed fields on the toolbar type
+            foreach (var field in toolbarType.GetFields(
+                         BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (typeof(VisualElement).IsAssignableFrom(field.FieldType))
+                {
+                    var root = field.GetValue(toolbarObj) as VisualElement;
+                    if (root != null) return root;
+                }
+            }
+
+            return null;
         }
 
         private static void RefreshFromPresetIfNeeded()
@@ -143,7 +189,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
                 using (new EditorGUI.DisabledScope(true))
                 {
                     var noSceneContent = new GUIContent(
-                        "No Scenes Added",
+                        "No Scenes",
                         "No scenes in the active preset. Open Instant Scene Switcher via Tools > Saad Khawaja > Instant Scene Switcher to add scenes or switch presets."
                     );
                     GUI.Button(new Rect(10, 2, 160, 18), noSceneContent, EditorStyles.toolbarPopup);
