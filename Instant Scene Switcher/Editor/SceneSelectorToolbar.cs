@@ -207,6 +207,80 @@ namespace SaadKhawaja.InstantSceneSwitcher
             UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
 
+        [MenuItem("Tools/Saad Khawaja/Instant Scene Switcher/Show Toolbar")]
+        public static void ForceShowToolbar()
+        {
+            _injected = false;
+            _treeDumped = false;
+            _onGuiLogged = false;
+
+            var editorAssembly = typeof(Editor).Assembly;
+            var toolbarType = editorAssembly.GetType("UnityEditor.Toolbar");
+            Debug.Log($"[ISS] Toolbar type: {(toolbarType == null ? "NOT FOUND" : toolbarType.FullName)}");
+            if (toolbarType == null) return;
+
+            var toolbars = Resources.FindObjectsOfTypeAll(toolbarType);
+            Debug.Log($"[ISS] Toolbar instances found: {toolbars.Length}");
+            if (toolbars.Length == 0) return;
+
+            var toolbarObj = toolbars[0];
+            Debug.Log($"[ISS] Toolbar object type: {toolbarObj.GetType().FullName}");
+
+            var root = GetToolbarRoot(toolbarType, toolbarObj);
+            Debug.Log($"[ISS] Root VisualElement: {(root == null ? "NULL" : root.GetType().Name + " name='" + root.name + "'")}");
+            if (root == null) return;
+
+            var rightZone = root.Q("ToolbarZoneRightAlign")
+                         ?? root.Q("ToolbarZoneRight")
+                         ?? root.Q("unity-right-toolbar-zone");
+            Debug.Log($"[ISS] Right zone: {(rightZone == null ? "NULL" : rightZone.GetType().Name + " childCount=" + rightZone.childCount)}");
+            if (rightZone == null) return;
+
+            var existing = rightZone.Q("SceneSelectorContainer");
+            Debug.Log($"[ISS] Existing SceneSelectorContainer: {(existing == null ? "not present" : "ALREADY PRESENT")}");
+            if (existing != null)
+            {
+                Debug.Log($"[ISS]   Container worldBound: {existing.worldBound}");
+                Debug.Log($"[ISS]   Container resolvedStyle size: {existing.resolvedStyle.width}x{existing.resolvedStyle.height}");
+                Debug.Log($"[ISS]   Container display: {existing.resolvedStyle.display}");
+                Debug.Log($"[ISS]   Container visibility: {existing.resolvedStyle.visibility}");
+                foreach (var child in existing.Children())
+                    Debug.Log($"[ISS]   Child: {child.GetType().Name} worldBound={child.worldBound} size={child.resolvedStyle.width}x{child.resolvedStyle.height}");
+                return;
+            }
+
+            var parent = new VisualElement { name = "SceneSelectorContainer" };
+            parent.style.flexDirection = FlexDirection.Row;
+            parent.style.alignItems = Align.Center;
+            parent.style.justifyContent = Justify.Center;
+            parent.style.marginTop = 0;
+            parent.style.marginBottom = 0;
+            parent.style.paddingTop = 0;
+            parent.style.paddingBottom = 0;
+            parent.style.flexGrow = 0;
+
+            var container = new IMGUIContainer(() =>
+            {
+                try { OnGUI(); }
+                catch (Exception ex) { Debug.LogError($"[ISS] OnGUI exception: {ex}"); }
+            });
+            container.style.alignSelf = Align.Center;
+            container.style.marginTop = 0;
+            container.style.marginBottom = 0;
+            container.style.paddingTop = 0;
+            container.style.paddingBottom = 0;
+            container.style.flexGrow = 0;
+            container.style.width = 170;
+            container.style.height = 22;
+
+            parent.Add(container);
+            rightZone.Insert(0, parent);
+            _injected = true;
+            Debug.Log("[ISS] Injection complete. Parent worldBound will be available after next layout pass.");
+
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+        }
+
         private static int ComputeHash(System.Collections.Generic.List<string> scenes)
         {
             if (scenes == null || scenes.Count == 0) return 0;
