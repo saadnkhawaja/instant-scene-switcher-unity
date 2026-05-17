@@ -38,7 +38,7 @@ namespace SaadKhawaja.InstantSceneSwitcher
             SceneManager.activeSceneChanged             += (_, __) => MainToolbar.Refresh(kElementPath);
         }
 
-        [MainToolbarElement(kElementPath, defaultDockPosition = MainToolbarDockPosition.Right, defaultDockIndex = 0)]
+        [MainToolbarElement(kElementPath, defaultDockPosition = MainToolbarDockPosition.Left, defaultDockIndex = 0)]
         public static MainToolbarElement CreateSceneSelectorDropdown()
         {
             RefreshScenes();
